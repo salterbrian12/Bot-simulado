@@ -343,7 +343,7 @@ if (typeof module !== "undefined") module.exports = { calcular: calcular, resume
       "<div><span>Capital</span><b>USD " + fN(x.capital, 2) + "</b><small>desde USD " + fN(CAPITAL_INICIAL, 0) + "</small></div>" +
       '<div><span>Resultado cerrado</span><b class="' + cl(x.resultado_usd) + '">' + fS(x.resultado_usd, 2) + "</b><small>" + x.cerradas + " cerradas · " + x.ganadoras + " ganadoras</small></div>" +
       '<div><span>Flotante</span><b class="' + cl(x.flotante) + '">' + fS(x.flotante, 2) + "</b><small>" + x.abiertas + " posiciones abiertas</small></div>" +
-      "<div><span>Riesgo abierto</span><b>" + fN(riesgo, 1) + "%</b><small>si saltan todos los stops</small></div>" +
+      "<div><span>Hasta los stops</span><b>" + fN(riesgo, 1) + "%</b><small>del capital se cedería desde el precio actual</small></div>" +
       "<div><span>Expuesto</span><b>" + fN(x.expuesto / Math.max(x.capital, 1), 1) + "x</b><small>USD " + fN(x.expuesto, 0) + " en posiciones</small></div>" +
       "<div><span>Peor caída</span><b>" + fN(x.caida_max * 100, 1) + "%</b><small>desde un pico</small></div>" +
       "<div><span>En vivo</span><b>" + viv.length + " entradas</b><small>" + vc.length + " cerradas</small></div>" +
