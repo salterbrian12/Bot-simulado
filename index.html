@@ -70,6 +70,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .caja { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .caja .fila { display: flex; gap: 8px; flex-wrap: wrap; }
 textarea { font: 12px var(--fn); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; width: 100%; min-height: 64px; }
+.sl { font-size: 13.5px; font-weight: 600; border-radius: 8px; padding: 7px 10px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.sl.pos { color: var(--win); background: color-mix(in srgb, var(--win) 15%, transparent); }
+.sl.neg { color: var(--loss); background: color-mix(in srgb, var(--loss) 15%, transparent); }
+.resumen { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 13.5px; }
 .vacio { color: var(--muted); padding: 18px 12px; text-align: center; background: var(--panel); border: 1px dashed var(--line); border-radius: 12px; }
 footer { color: var(--muted); font-size: 12.5px; display: flex; flex-direction: column; gap: 8px; }
 footer label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -345,11 +349,15 @@ if (typeof module !== "undefined") module.exports = { calcular: calcular, resume
       "<div><span>En vivo</span><b>" + viv.length + " entradas</b><small>" + vc.length + " cerradas</small></div>" +
       '<div><span>Resultado en vivo</span><b class="' + cl(vu) + '">' + fS(vu, 2) + "</b><small>solo cerradas</small></div>";
     var h = "";
-    if (tab === "ab") h = ab.map(function (o) {
+    // resultado si el precio toca el stop tal como esta ahora (con comisiones; sin financiacion, que suele ser chica)
+    function siStop(o) { var n = o.s * (o.stop_actual / o.precio_entrada - 1) - (COSTO[o.simbolo] || COSTO_OTRAS); return { pct: n * 100, usd: o.tamano_usd * n }; }
+    var enGan = ab.filter(function (o) { return siStop(o).usd >= 0; }).length, totStop = ab.reduce(function (t, o) { return t + siStop(o).usd; }, 0);
+    if (tab === "ab") h = (ab.length ? '<div class="resumen">Stops ya en ganancia: <b class="pos">' + enGan + "</b> · todavía en pérdida: <b class=\"neg\">" + (ab.length - enGan) + '</b><br>Si saltaran todos los stops ahora: <b class="' + cl(totStop) + '">USD ' + fS(totStop, 2) + "</b></div>" : "") + ab.map(function (o) {
       var a = Math.min(o.stop_actual, o.objetivo), b = Math.max(o.stop_actual, o.objetivo), pos = function (p) { return Math.max(0, Math.min(100, (p - a) / (b - a) * 100)); };
       var pe = pos(o.precio_entrada), pa = pos(o.precio_actual), l = Math.min(pe, pa), w = Math.abs(pa - pe), izq = o.s === 1 ? "stop " + fP(o.stop_actual) : "objetivo " + fP(o.objetivo), der = o.s === 1 ? "objetivo " + fP(o.objetivo) : "stop " + fP(o.stop_actual);
       return '<div class="op"><div class="r1"><div><span class="m">' + o.simbolo.replace("USDT", "") + "</span> " + o.lado + " · nº " + o.apiladas + etapa(o) + '</div><div class="res ' + cl(o.flotante) + '">' + fS(o.flotante * 100, 2) + "%<br>USD " + fS(o.usd_flotante, 2) + "</div></div>" +
         '<div><div class="barra"><u style="left:' + l + "%;width:" + w + "%;background:var(--" + (o.flotante >= 0 ? "win" : "loss") + ')"></u><i style="left:' + pa + '%"></i></div><div class="ext"><span>' + izq + "</span><span>" + der + "</span></div></div>" +
+        (function () { var x = siStop(o); return '<div class="sl ' + cl(x.usd) + '"><span>Si toca el stop: ' + (x.usd >= 0 ? "ganancia" : "pérdida") + "</span><span>" + fS(x.pct, 2) + "% · USD " + fS(x.usd, 2) + "</span></div>"; })() +
         '<div class="det"><span>Entrada <b>' + fP(o.precio_entrada) + "</b></span><span>Ahora <b>" + fP(o.precio_actual) + "</b></span><span>Fecha <b>" + fF(o.t_entrada) + "</b></span><span>Tamaño <b>USD " + fN(o.tamano_usd, 0) + "</b></span><span>Stop " + (o.movido ? "(movido) " : "inicial ") + "<b>" + fP(o.stop_actual) + "</b></span><span>Objetivo <b>" + fP(o.objetivo) + "</b></span></div>" +
         (pidiendo === o.simbolo + "|" + o.t_entrada
           ? '<div class="acc"><span>¿Cerrar ahora a ' + fP(o.precio_actual) + " (USD " + fS(o.usd_flotante, 2) + " antes de costos)? Se cierra en las " + enCuantas(o.simbolo, o.t_entrada) + ' cuentas que la tienen abierta y no se puede deshacer.</span><button type="button" class="pel" data-acc="si" data-s="' + o.simbolo + '" data-te="' + o.t_entrada + '" data-p="' + o.precio_actual + '">Sí, cerrar</button><button type="button" data-acc="no">No</button></div>'
