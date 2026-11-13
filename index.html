@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#10141b">
+<title>Bot simulado</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%2310141b'/%3E%3Cpath d='M36 132l40-40 28 24 52-60' fill='none' stroke='%235fd66c' stroke-width='16' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%2310141b'/%3E%3Cpath d='M36 132l40-40 28 24 52-60' fill='none' stroke='%235fd66c' stroke-width='16' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+/* Panel para celular: una columna. Arriba las cuatro cuentas para elegir, despues el detalle de la elegida. */
+:root {
+  --bg: #10141b; --panel: #181d26; --panel2: #1f2531; --line: #2a313d; --fg: #e6eaf0; --muted: #8d98a8;
+  --accent: #6ea0ff; --win: #5fd66c; --loss: #f0736e; --warn-bg: #3a2a12; --warn-line: #6b4a12; --track: #2a313d;
+  --f: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; --fn: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root {
+  --bg: #f3f5f8; --panel: #ffffff; --panel2: #eef1f6; --line: #d9dee6; --fg: #18202b; --muted: #5d6877;
+  --accent: #2458c9; --win: #1f8a2f; --loss: #c2332f; --warn-bg: #fff3d6; --warn-line: #e2c172; --track: #dfe4ec; color-scheme: light; } }
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f);
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(28px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+main { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+[hidden] { display: none !important; }
+header { display: flex; align-items: center; gap: 12px; }
+header div { flex: 1; min-width: 0; }
+h1 { font-size: 19px; margin: 0; font-weight: 650; }
+h2 { font-size: 12px; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; font-weight: 600; }
+.sub { color: var(--muted); font-size: 12.5px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#act { background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 600; min-height: 44px; }
+#act[disabled] { opacity: .55; }
+.aviso { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; }
+.reglas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.regla { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.regla[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--panel2); }
+.regla .n { font-size: 12.5px; color: var(--muted); min-height: 2.8em; }
+.regla .c { font: 600 18px var(--fn); font-variant-numeric: tabular-nums; }
+.regla .d { font: 12.5px var(--fn); font-variant-numeric: tabular-nums; }
+.kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+@media (min-width: 560px) { .kpis { grid-template-columns: repeat(4, 1fr); } .reglas { grid-template-columns: repeat(4, 1fr); } }
+.kpis div { background: var(--panel); padding: 10px 12px; min-width: 0; }
+.kpis span { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.kpis b { font: 600 17px var(--fn); font-variant-numeric: tabular-nums; }
+.kpis small { display: block; color: var(--muted); font-size: 11.5px; }
+.pos { color: var(--win); } .neg { color: var(--loss); }
+.tabs { display: flex; gap: 6px; }
+.tabs button { flex: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 6px; min-height: 44px; font-size: 14px; }
+.tabs button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.lista { display: flex; flex-direction: column; gap: 8px; }
+.op { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.op .r1 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.op .m { font-weight: 650; font-size: 16px; }
+.op .tag { font-size: 11.5px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--muted); margin-left: 4px; white-space: nowrap; }
+.op .tag.vivo { border-color: var(--accent); color: var(--accent); }
+.op .res { font: 600 15px var(--fn); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.op .det { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; font-size: 12.5px; color: var(--muted); }
+.op .det b { color: var(--fg); font: 500 12.5px var(--fn); font-variant-numeric: tabular-nums; }
+.barra { position: relative; height: 6px; border-radius: 3px; background: var(--track); margin: 4px 0 2px; }
+.barra i { position: absolute; top: -4px; width: 3px; height: 14px; border-radius: 2px; background: var(--fg); transform: translateX(-1px); }
+.barra u { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.ext { display: flex; justify-content: space-between; font: 11px var(--fn); color: var(--muted); }
+.acc { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+.acc button, .caja button { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; min-height: 40px; font-size: 13.5px; }
+.acc button.pel { background: var(--loss); border-color: var(--loss); color: #fff; font-weight: 600; }
+.caja { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.caja .fila { display: flex; gap: 8px; flex-wrap: wrap; }
+textarea { font: 12px var(--fn); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; width: 100%; min-height: 64px; }
+.vacio { color: var(--muted); padding: 18px 12px; text-align: center; background: var(--panel); border: 1px dashed var(--line); border-radius: 12px; }
+footer { color: var(--muted); font-size: 12.5px; display: flex; flex-direction: column; gap: 8px; }
+footer label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+input[type=date] { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-height: 40px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div><h1>Bot simulado</h1><div class="sub" id="estado">Cargando precios de Binance…</div></div>
+    <button id="act" type="button">Actualizar</button>
+  </header>
+  <div class="aviso" id="aviso" hidden></div>
+  <section><h2>Las cuatro cuentas</h2><div class="reglas" id="reglas"></div></section>
+  <section id="detalle" hidden>
+    <h2 id="titulo"></h2>
+    <div class="kpis" id="kpis"></div>
+  </section>
+  <section id="sec" hidden>
+    <div class="tabs" id="tabs">
+      <button type="button" data-t="ab" aria-pressed="true">Abiertas</button>
+      <button type="button" data-t="ce" aria-pressed="false">Cerradas</button>
+      <button type="button" data-t="mo" aria-pressed="false">Monedas</button>
+    </div>
+    <div class="lista" id="lista" style="margin-top:10px"></div>
+  </section>
+  <footer>
+    <div class="caja">
+      <div><b style="color:var(--fg)">Cierres a mano</b> · <span id="nman">ninguno</span></div>
+      <div>Para que el bot de la PC cierre las mismas posiciones, copiá el código y pegalo en el archivo <b>cierres_manuales.txt</b> de la carpeta bot_simulado. También sirve para pasar los cierres a otro teléfono o navegador.</div>
+      <div class="fila"><button type="button" id="copiar">Copiar código</button><button type="button" id="importar">Cargar el código pegado</button></div>
+      <textarea id="codigo" aria-label="Código de cierres a mano" placeholder="Acá aparece el código al copiar. Para cargar cierres hechos en otro dispositivo, pegalo acá y tocá Cargar."></textarea>
+      <div id="msgman"></div>
+    </div>
+    <label for="vivo">Prueba en vivo desde <input type="date" id="vivo"></label>
+    <div>Operaciones ficticias con precios reales de Binance Futuros, sin dinero. Podés cerrar una posición a mano desde la pestaña Abiertas: se cierra al precio que muestra el panel en ese momento, en todas las cuentas que la tengan abierta, y no se puede deshacer. Esta página hace sola las mismas cuentas que el bot de la PC: no necesita que la computadora esté prendida. Cuenta simulada desde el 1/9/2026, USD 2.000 por regla, 1% de riesgo por posición. Horarios de Buenos Aires. Se actualiza sola cada 5 minutos mientras esté abierta.</div>
+  </footer>
+</main>
+
+<script id="nucleo">
+// ====== Mismas reglas y numeros que bot_simulado.py ======
+var CAPITAL_INICIAL = 2000.0, RIESGO = 0.01, COMPRESION = 0.40, OBJETIVO = 0.15, STOP = 0.05, MAX_VELAS = 180, VENTANA_CINTA = 540;
+var MONEDAS = { BTCUSDT: 1.000, ETHUSDT: 1.140, SOLUSDT: 2.538, BNBUSDT: 1.148, DOGEUSDT: 1.693, ADAUSDT: 1.846 };
+var COSTO = { BTCUSDT: 0.0014, ETHUSDT: 0.0014 }, COSTO_OTRAS = 0.0020;
+var ANCLA = Date.UTC(2025, 0, 1) / 1000, INICIO_CUENTA = Date.UTC(2026, 8, 1) / 1000, H4 = 4 * 3600;
+var F_RANGO = 25.84, F_EFIC = 0.0966, F_CRUCES = 7;
+var REGLAS = [
+  ["movil60", "Stop móvil, 60 días", { filtro: true, varias: true, movil: 1.5, max_velas: 360 }],
+  ["cuidada", "Stop móvil 60 días + entradas cuidadas", { filtro: true, varias: true, movil: 1.5, max_velas: 360, max_ema50: 3.0, stop_min_atr: 4.5 }],
+  ["objmovil60", "Stop móvil + objetivo móvil, 60 días", { filtro: true, varias: true, movil: 1.5, max_velas: 360, tp_movil: 3.0 }],
+  ["objmovil30", "Stop móvil + objetivo móvil, 30 días", { filtro: true, varias: true, movil: 1.5, tp_movil: 3.0 }]
+];
+function ema(v, per) { var a = 2.0 / (per + 1), out = [], e = null; for (var i = 0; i < v.length; i++) { e = e === null ? v[i] : e + a * (v[i] - e); out.push(e); } return out; }
+function rsi14(c) {
+  var out = [null], g = null, p = null, a = 1.0 / 14;
+  for (var i = 1; i < c.length; i++) { var d = c[i] - c[i - 1], gan = Math.max(d, 0), per = Math.max(-d, 0); g = g === null ? gan : g + a * (gan - g); p = p === null ? per : p + a * (per - p); out.push(p === 0 ? 100.0 : 100.0 - 100.0 / (1.0 + g / p)); }
+  return out;
+}
+function indicadores(velas) {
+  var c = velas.map(function (v) { return v[4]; }), e9 = ema(c, 9), e50 = ema(c, 50), e100 = ema(c, 100), e200 = ema(c, 200), n = c.length, cinta = new Array(n), pct = new Array(n).fill(null);
+  for (var i = 0; i < n; i++) cinta[i] = (Math.max(e9[i], e50[i], e100[i], e200[i]) - Math.min(e9[i], e50[i], e100[i], e200[i])) / c[i];
+  for (i = VENTANA_CINTA - 1; i < n; i++) { var x = cinta[i], me = 0, ig = 0; for (var j = i - VENTANA_CINTA + 1; j <= i; j++) { if (cinta[j] < x) me++; else if (cinta[j] === x) ig++; } pct[i] = (me + (ig + 1) / 2.0) / VENTANA_CINTA; }
+  return { c: c, e9: e9, e50: e50, pct: pct, rsi: rsi14(c) };
+}
+function extras(velas, k) {
+  var c = velas.map(function (v) { return v[4]; }), e50 = ema(c, 50), dist = [], atr = [], a = 1.0 / 14, x = null;
+  for (var i = 0; i < c.length; i++) {
+    dist.push((c[i] / e50[i] - 1) * 100 / k);
+    var v = velas[i], tr = i === 0 ? v[2] - v[3] : Math.max(v[2] - v[3], Math.abs(v[2] - c[i - 1]), Math.abs(v[3] - c[i - 1]));
+    x = x === null ? tr : x + a * (tr - x); atr.push(x / c[i]);
+  }
+  return { dist: dist, atr: atr };
+}
+function lateral(velas, c, e50, i, k) {
+  if (i < 180) return { pasa: false, rango: null, efic: null, cruces: null };
+  var mx = -Infinity, mn = Infinity, j;
+  for (j = i - 179; j <= i; j++) { if (velas[j][2] > mx) mx = velas[j][2]; if (velas[j][3] < mn) mn = velas[j][3]; }
+  var rango = (mx / mn - 1) * 100 / k, camino = 0;
+  for (j = i - 29; j <= i; j++) camino += Math.abs(c[j] - c[j - 1]);
+  var efic = camino > 0 ? Math.abs(c[i] - c[i - 30]) / camino : 0.0, cruces = 0;
+  function sg(q) { return (c[q] > e50[q] ? 1 : 0) - (c[q] < e50[q] ? 1 : 0); }
+  for (j = i - 59; j <= i; j++) if (sg(j) !== sg(j - 1)) cruces++;
+  return { pasa: rango <= F_RANGO && efic >= F_EFIC && cruces <= F_CRUCES, rango: rango, efic: efic, cruces: cruces };
+}
+function senales(velas, k) {
+  var I = indicadores(velas), c = I.c, e9 = I.e9, e50 = I.e50, pct = I.pct, rsi = I.rsi, s = new Array(c.length).fill(0), fil = {};
+  for (var i = 1; i < c.length; i++) {
+    if (pct[i] === null || rsi[i] === null || pct[i] >= COMPRESION) continue;
+    var arr = c[i] > Math.max(e9[i], e50[i]), arrP = c[i - 1] > Math.max(e9[i - 1], e50[i - 1]), aba = c[i] < Math.min(e9[i], e50[i]), abaP = c[i - 1] < Math.min(e9[i - 1], e50[i - 1]);
+    if (arr && !arrP && rsi[i] > 52) s[i] = 1; else if (aba && !abaP && rsi[i] < 48) s[i] = -1;
+    if (s[i] !== 0) fil[i] = lateral(velas, c, e50, i, k).pasa;
+  }
+  i = c.length - 1; var estado = null;
+  if (i >= 0 && pct[i] !== null) {
+    var L = lateral(velas, c, e50, i, k);
+    estado = { precio: c[i], cinta_pct: pct[i], rsi: rsi[i], posicion: c[i] > Math.max(e9[i], e50[i]) ? "arriba" : c[i] < Math.min(e9[i], e50[i]) ? "abajo" : "entre", filtro: L.pasa, rango: L.rango, eficiencia: L.efic, cruces: L.cruces };
+  }
+  return { s: s, estado: estado, fil: fil };
+}
+function simular(simbolo, velas, enCurso, inicioTs, kw, pre, extra, man) {
+  var k = MONEDAS[simbolo], tp = OBJETIVO * k, st = STOP * k, s = pre.s, fil = pre.fil, movil = kw.movil == null ? null : kw.movil, maxV = kw.max_velas || MAX_VELAS;
+  var barras = enCurso ? velas.concat([enCurso]) : velas, n = barras.length, ncerr = velas.length, abiertas = [], ops = [];
+  for (var i = 0; i < n; i++) {
+    var cerrada = i < ncerr, sigue = [];
+    for (var q = 0; q < abiertas.length; q++) {
+      var p = abiertas[q];
+      if (i < p.e) { sigue.push(p); continue; }
+      var sd = p.s, ent = p.precio_entrada, hi = barras[i][2], lo = barras[i][3], cl = barras[i][4], sal = null, mn = man ? man[simbolo + "|" + p.t_entrada] : null;
+      if (mn && barras[i][0] + H4 > mn[0]) sal = [mn[1], "manual", sd * (mn[1] / ent - 1)];   // cierre a mano: vale desde la vela en la que se pidio
+      else if ((sd === 1 && lo <= p.stop_actual) || (sd === -1 && hi >= p.stop_actual)) sal = [p.stop_actual, p.movido ? "stop móvil" : "stop", sd * (p.stop_actual / ent - 1)];
+      else if ((sd === 1 && hi >= p.objetivo) || (sd === -1 && lo <= p.objetivo)) sal = [p.objetivo, "objetivo", sd * (p.objetivo / ent - 1)];
+      else if (cerrada && i === p.e + maxV - 1) sal = [cl, "tiempo", sd * (cl / ent - 1)];
+      if (sal) { p.precio_salida = sal[0]; p.motivo = sal[1]; p.bruto = sal[2]; p.estado = "cerrada"; p.t_salida = sal[1] === "manual" ? Math.max(mn[0], p.t_entrada) : barras[i][0]; ops.push(p); continue; }
+      if (movil !== null && cerrada) {
+        p.mejor = Math.max(p.mejor, sd * (cl / ent - 1) / p.riesgo);
+        var nuevo = ent * (1 + sd * (p.mejor - movil) * p.riesgo);
+        if (sd * (nuevo - p.stop_actual) > 1e-12) { p.stop_actual = nuevo; p.movido = true; }
+        if (kw.tp_movil != null) p.objetivo = ent * (1 + sd * (p.mejor + kw.tp_movil) * p.riesgo);
+      }
+      sigue.push(p);
+    }
+    abiertas = sigue;
+    if (!cerrada || s[i] === 0 || i + 1 >= n || velas[i][0] + H4 < inicioTs) continue;
+    var d = s[i];
+    if (kw.filtro && !fil[i]) continue;
+    if (abiertas.some(function (x) { return x.s !== d; }) || (abiertas.length && !kw.varias)) continue;
+    if (kw.max_ema50 != null && d * extra.dist[i] > kw.max_ema50) continue;
+    var rg = kw.stop_min_atr == null ? st : Math.max(st, kw.stop_min_atr * extra.atr[i]), e = barras[i + 1][1];
+    abiertas.push({ simbolo: simbolo, lado: d === 1 ? "compra" : "venta", s: d, e: i + 1, t_entrada: barras[i + 1][0], precio_entrada: e, riesgo: rg, stop: e * (1 - d * rg), stop_actual: e * (1 - d * rg),
+      objetivo: e * (1 + d * rg * tp / st), apiladas: abiertas.length + 1, movido: false, mejor: 0.0, estado: "abierta", t_salida: null, precio_salida: null, motivo: "", bruto: null });
+  }
+  abiertas.forEach(function (p) { p.precio_actual = barras[n - 1][4]; p.flotante = p.s * (barras[n - 1][4] / p.precio_entrada - 1); ops.push(p); });
+  return ops;
+}
+// funding: { simbolo: [[t_ms, tasa], ...] } ; se suma lo que cae en (entrada, salida]
+function cuenta(ops, funding) {
+  ops = ops.slice().sort(function (a, b) { return a.t_entrada - b.t_entrada || (a.simbolo < b.simbolo ? -1 : a.simbolo > b.simbolo ? 1 : 0); });
+  var cerr = ops.filter(function (o) { return o.estado === "cerrada"; }).sort(function (a, b) { return a.t_salida - b.t_salida; });
+  cerr.forEach(function (o) {
+    var F = funding[o.simbolo] || [], f = 0;
+    for (var i = 0; i < F.length; i++) if (F[i][0] > o.t_entrada * 1000 && F[i][0] <= o.t_salida * 1000) f += F[i][1];
+    o.funding = f; o.neto = o.bruto - o.s * f - (COSTO[o.simbolo] || COSTO_OTRAS);
+  });
+  var capital = CAPITAL_INICIAL, k = 0;
+  ops.forEach(function (o) {
+    while (k < cerr.length && cerr[k].t_salida <= o.t_entrada) { capital += cerr[k].usd; k++; }
+    o.tamano_usd = capital * RIESGO / o.riesgo;
+    if (o.estado === "cerrada") o.usd = o.tamano_usd * o.neto; else o.usd_flotante = o.tamano_usd * o.flotante;
+  });
+  // el while de arriba necesita el usd de las cerradas en orden de salida: las que cierran antes de la entrada ya lo tienen porque entraron antes
+  return ops;
+}
+function resumen(ops) {
+  var c = ops.filter(function (o) { return o.estado === "cerrada"; }).sort(function (a, b) { return a.t_salida - b.t_salida; }), a = ops.filter(function (o) { return o.estado === "abierta"; });
+  var gan = 0, cap = CAPITAL_INICIAL, pico = CAPITAL_INICIAL, dd = 0;
+  c.forEach(function (o) { gan += o.usd; cap += o.usd; pico = Math.max(pico, cap); dd = Math.max(dd, 1 - cap / pico); });
+  return { cerradas: c.length, abiertas: a.length, ganadoras: c.filter(function (o) { return o.usd > 0; }).length, resultado_usd: gan, capital: CAPITAL_INICIAL + gan,
+    flotante: a.reduce(function (t, o) { return t + o.usd_flotante; }, 0), caida_max: dd, expuesto: a.reduce(function (t, o) { return t + o.tamano_usd; }, 0) };
+}
+function calcular(datos, funding, manuales) {       // datos: { simbolo: { velas: [...cerradas], enCurso: vela o null } }
+  var cuentas = {}, estados = {};
+  REGLAS.forEach(function (r) { cuentas[r[0]] = []; });
+  Object.keys(MONEDAS).forEach(function (sim) {
+    var d = datos[sim]; if (!d || d.velas.length < VENTANA_CINTA + 5) return;
+    var pre = senales(d.velas, MONEDAS[sim]), ex = extras(d.velas, MONEDAS[sim]); estados[sim] = pre.estado;
+    REGLAS.forEach(function (r) { cuentas[r[0]] = cuentas[r[0]].concat(simular(sim, d.velas, d.enCurso, INICIO_CUENTA, r[2], pre, ex, manuales ? manuales[r[0]] : null)); });
+  });
+  REGLAS.forEach(function (r) { cuentas[r[0]] = cuenta(cuentas[r[0]], funding); });
+  return { cuentas: cuentas, estados: estados };
+}
+if (typeof module !== "undefined") module.exports = { calcular: calcular, resumen: resumen, REGLAS: REGLAS, MONEDAS: MONEDAS, ANCLA: ANCLA, INICIO_CUENTA: INICIO_CUENTA, H4: H4 };
+</script>
+
+<script>
+(function () {
+  var BASE = "https://fapi.binance.com", $ = function (id) { return document.getElementById(id); };
+  var R = null, regla = "movil60", tab = "ab", ocupado = false, ultimo = 0, vivoTs = 0, DAT = null, FUN = null, M = [], pidiendo = null, guarda = true;
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function fN(x, d) { return x.toLocaleString("es-AR", { minimumFractionDigits: d, maximumFractionDigits: d }); }
+  function fS(x, d) { return (x >= 0 ? "+" : "−") + fN(Math.abs(x), d); }
+  function fP(p) { var a = Math.abs(p), d = a >= 1000 ? 0 : a >= 10 ? 2 : a >= 1 ? 3 : 5; return fN(p, d); }
+  function p2(x) { return (x < 10 ? "0" : "") + x; }
+  function fF(t, corta) { var d = new Date((t - 3 * 3600) * 1000), s = p2(d.getUTCDate()) + "/" + p2(d.getUTCMonth() + 1); return corta ? s + " " + p2(d.getUTCHours()) + ":" + p2(d.getUTCMinutes()) : s + "/" + String(d.getUTCFullYear()).slice(2) + " " + p2(d.getUTCHours()) + ":00"; }
+  function cl(x) { return x >= 0 ? "pos" : "neg"; }
+  // ---- cierres a mano: lista de {r: regla, s: moneda, te: entrada, t: momento, p: precio}
+  function aCodigo(L) { return L.map(function (m) { return [m.r, m.s, m.te, m.t, m.p].join("|"); }).join(";"); }
+  function deCodigo(txt) {
+    var out = [];
+    String(txt || "").split(/[;\n]/).forEach(function (parte) {
+      var x = parte.trim().split("|");
+      if (x.length === 5 && REGLAS.some(function (r) { return r[0] === x[0]; }) && MONEDAS[x[1]] && +x[2] > 0 && +x[3] > 0 && +x[4] > 0) out.push({ r: x[0], s: x[1], te: Math.floor(+x[2]), t: Math.floor(+x[3]), p: +x[4] });
+    });
+    return out;
+  }
+  function porRegla() { var o = {}; REGLAS.forEach(function (r) { o[r[0]] = {}; }); M.forEach(function (m) { o[m.r][m.s + "|" + m.te] = [m.t, m.p]; }); return o; }
+  function guardarM() { lsSet("cierres_manuales", aCodigo(M)); guarda = lsGet("cierres_manuales") === aCodigo(M); }
+  function abiertaEn(k, sm, te) { return R.cuentas[k].some(function (o) { return o.estado === "abierta" && o.simbolo === sm && o.t_entrada === te; }); }
+  function enCuantas(sm, te) { return REGLAS.filter(function (r) { return abiertaEn(r[0], sm, te); }).length; }
+  function recalcular() { if (DAT) { R = calcular(DAT, FUN, porRegla()); pintar(); } }
+  M = deCodigo(lsGet("cierres_manuales"));
+  function pedir(ruta) {
+    var c = new AbortController(), t = setTimeout(function () { c.abort(); }, 25000);
+    return fetch(BASE + ruta, { signal: c.signal }).then(function (r) { clearTimeout(t); if (!r.ok) throw new Error("Binance respondió " + r.status); return r.json(); }, function (e) { clearTimeout(t); throw e; });
+  }
+  function traerVelas(sim) {
+    var velas = []; try { velas = JSON.parse(lsGet("velas4h_" + sim) || "[]"); } catch (e) { velas = []; }
+    if (velas.length && velas[0][0] !== ANCLA) velas = [];
+    var cursor = (velas.length ? velas[velas.length - 1][0] + H4 : ANCLA) * 1000, ahora = Date.now(), enCurso = null;
+    function paso() {
+      return pedir("/fapi/v1/klines?symbol=" + sim + "&interval=4h&startTime=" + cursor + "&limit=1500").then(function (d) {
+        d.forEach(function (v) {
+          var b = [Math.floor(v[0] / 1000), +v[1], +v[2], +v[3], +v[4]];
+          if (v[6] < ahora) { if (!velas.length || b[0] > velas[velas.length - 1][0]) velas.push(b); } else enCurso = b;
+        });
+        if (d.length === 1500) { cursor = d[d.length - 1][0] + H4 * 1000; return paso(); }
+      });
+    }
+    return paso().then(function () {
+      lsSet("velas4h_" + sim, JSON.stringify(velas));
+      if (enCurso && velas.length && enCurso[0] !== velas[velas.length - 1][0] + H4) enCurso = null;
+      return { velas: velas, enCurso: enCurso };
+    });
+  }
+  function traerFunding(sim) {
+    var out = [], cursor = INICIO_CUENTA * 1000;
+    function paso() {
+      return pedir("/fapi/v1/fundingRate?symbol=" + sim + "&startTime=" + cursor + "&limit=1000").then(function (d) {
+        d.forEach(function (x) { out.push([+x.fundingTime, +x.fundingRate]); });
+        if (d.length === 1000) { cursor = +d[d.length - 1].fundingTime + 1; return paso(); }
+      });
+    }
+    return paso().then(function () { return out; });
+  }
+  function actualizar() {
+    if (ocupado) return; ocupado = true; $("act").disabled = true; $("estado").textContent = R ? "Actualizando…" : "Cargando precios de Binance… la primera vez tarda unos segundos";
+    var sims = Object.keys(MONEDAS), datos = {}, funding = {}, sinFunding = false;
+    Promise.all(sims.map(function (s) { return traerVelas(s).then(function (d) { datos[s] = d; }); }))
+      .then(function () { return Promise.all(sims.map(function (s) { return traerFunding(s).then(function (f) { funding[s] = f; }, function () { sinFunding = true; }); })); })
+      .then(function () {
+        DAT = datos; FUN = funding; R = calcular(datos, funding, porRegla()); ultimo = Date.now(); $("aviso").hidden = !sinFunding;
+        if (sinFunding) $("aviso").textContent = "No pude leer el costo de financiación (funding) de alguna moneda: los resultados cerrados pueden diferir unos centavos de los de la PC.";
+        pintar();
+      })
+      .catch(function (e) {
+        $("aviso").hidden = false;
+        $("aviso").textContent = "No pude conectar con Binance (" + (e && e.message ? e.message : "sin conexión") + "). " + (R ? "Se muestran los últimos datos calculados." : "Revisá la conexión y tocá Actualizar.");
+        $("estado").textContent = R ? "Sin conexión · último dato " + fF(ultimo / 1000, true) : "Sin datos";
+      })
+      .then(function () { ocupado = false; $("act").disabled = false; });
+  }
+  function etapa(o) { return o.t_entrada >= vivoTs ? '<span class="tag vivo">en vivo</span>' : '<span class="tag">histórica</span>'; }
+  function pintar() {
+    if (!R) return;
+    $("estado").textContent = "Actualizado " + fF(ultimo / 1000, true) + " · precios de Binance Futuros";
+    $("reglas").innerHTML = REGLAS.map(function (r, i) {
+      var x = resumen(R.cuentas[r[0]]), pc = (x.capital / CAPITAL_INICIAL - 1) * 100;
+      return '<button type="button" class="regla" data-k="' + r[0] + '" aria-pressed="' + (r[0] === regla) + '"><span class="n">' + (i + 1) + ". " + r[1] + '</span><span class="c">USD ' + fN(x.capital, 0) + '</span><span class="d ' + cl(pc) + '">' + fS(pc, 1) + '% cerrado</span><span class="d">' + x.abiertas + ' abiertas · <span class="' + cl(x.flotante) + '">' + fS(x.flotante, 0) + "</span></span></button>";
+    }).join("");
+    var ops = R.cuentas[regla], x = resumen(ops), nom = REGLAS.filter(function (r) { return r[0] === regla; })[0][1];
+    var viv = ops.filter(function (o) { return o.t_entrada >= vivoTs; }), vc = viv.filter(function (o) { return o.estado === "cerrada"; }), vu = vc.reduce(function (t, o) { return t + o.usd; }, 0);
+    var ab = ops.filter(function (o) { return o.estado === "abierta"; }).sort(function (a, b) { return a.simbolo < b.simbolo ? -1 : a.simbolo > b.simbolo ? 1 : a.t_entrada - b.t_entrada; });
+    var ce = ops.filter(function (o) { return o.estado === "cerrada"; }).sort(function (a, b) { return b.t_salida - a.t_salida; });
+    var riesgo = ab.reduce(function (t, o) { return t + Math.max(0, o.s * (o.precio_actual - o.stop_actual) / o.precio_actual) * o.tamano_usd; }, 0) / Math.max(x.capital, 1) * 100;
+    $("detalle").hidden = false; $("sec").hidden = false; $("titulo").textContent = nom;
+    $("kpis").innerHTML =
+      "<div><span>Capital</span><b>USD " + fN(x.capital, 2) + "</b><small>desde USD " + fN(CAPITAL_INICIAL, 0) + "</small></div>" +
+      '<div><span>Resultado cerrado</span><b class="' + cl(x.resultado_usd) + '">' + fS(x.resultado_usd, 2) + "</b><small>" + x.cerradas + " cerradas · " + x.ganadoras + " ganadoras</small></div>" +
+      '<div><span>Flotante</span><b class="' + cl(x.flotante) + '">' + fS(x.flotante, 2) + "</b><small>" + x.abiertas + " posiciones abiertas</small></div>" +
+      "<div><span>Riesgo abierto</span><b>" + fN(riesgo, 1) + "%</b><small>si saltan todos los stops</small></div>" +
+      "<div><span>Expuesto</span><b>" + fN(x.expuesto / Math.max(x.capital, 1), 1) + "x</b><small>USD " + fN(x.expuesto, 0) + " en posiciones</small></div>" +
+      "<div><span>Peor caída</span><b>" + fN(x.caida_max * 100, 1) + "%</b><small>desde un pico</small></div>" +
+      "<div><span>En vivo</span><b>" + viv.length + " entradas</b><small>" + vc.length + " cerradas</small></div>" +
+      '<div><span>Resultado en vivo</span><b class="' + cl(vu) + '">' + fS(vu, 2) + "</b><small>solo cerradas</small></div>";
+    var h = "";
+    if (tab === "ab") h = ab.map(function (o) {
+      var a = Math.min(o.stop_actual, o.objetivo), b = Math.max(o.stop_actual, o.objetivo), pos = function (p) { return Math.max(0, Math.min(100, (p - a) / (b - a) * 100)); };
+      var pe = pos(o.precio_entrada), pa = pos(o.precio_actual), l = Math.min(pe, pa), w = Math.abs(pa - pe), izq = o.s === 1 ? "stop " + fP(o.stop_actual) : "objetivo " + fP(o.objetivo), der = o.s === 1 ? "objetivo " + fP(o.objetivo) : "stop " + fP(o.stop_actual);
+      return '<div class="op"><div class="r1"><div><span class="m">' + o.simbolo.replace("USDT", "") + "</span> " + o.lado + " · nº " + o.apiladas + etapa(o) + '</div><div class="res ' + cl(o.flotante) + '">' + fS(o.flotante * 100, 2) + "%<br>USD " + fS(o.usd_flotante, 2) + "</div></div>" +
+        '<div><div class="barra"><u style="left:' + l + "%;width:" + w + "%;background:var(--" + (o.flotante >= 0 ? "win" : "loss") + ')"></u><i style="left:' + pa + '%"></i></div><div class="ext"><span>' + izq + "</span><span>" + der + "</span></div></div>" +
+        '<div class="det"><span>Entrada <b>' + fP(o.precio_entrada) + "</b></span><span>Ahora <b>" + fP(o.precio_actual) + "</b></span><span>Fecha <b>" + fF(o.t_entrada) + "</b></span><span>Tamaño <b>USD " + fN(o.tamano_usd, 0) + "</b></span><span>Stop " + (o.movido ? "(movido) " : "inicial ") + "<b>" + fP(o.stop_actual) + "</b></span><span>Objetivo <b>" + fP(o.objetivo) + "</b></span></div>" +
+        (pidiendo === o.simbolo + "|" + o.t_entrada
+          ? '<div class="acc"><span>¿Cerrar ahora a ' + fP(o.precio_actual) + " (USD " + fS(o.usd_flotante, 2) + " antes de costos)? Se cierra en las " + enCuantas(o.simbolo, o.t_entrada) + ' cuentas que la tienen abierta y no se puede deshacer.</span><button type="button" class="pel" data-acc="si" data-s="' + o.simbolo + '" data-te="' + o.t_entrada + '" data-p="' + o.precio_actual + '">Sí, cerrar</button><button type="button" data-acc="no">No</button></div>'
+          : '<div class="acc"><button type="button" data-acc="pedir" data-s="' + o.simbolo + '" data-te="' + o.t_entrada + '">Cerrar a mano</button></div>') + "</div>";
+    }).join("") || '<div class="vacio">Ninguna posición abierta por ahora. Con el filtro activo pueden pasar varios días entre señales.</div>';
+    else if (tab === "ce") h = ce.map(function (o) {
+      return '<div class="op"><div class="r1"><div><span class="m">' + o.simbolo.replace("USDT", "") + "</span> " + o.lado + " · nº " + o.apiladas + etapa(o) + '</div><div class="res ' + cl(o.usd) + '">' + fS(o.neto * 100, 2) + "%<br>USD " + fS(o.usd, 2) + "</div></div>" +
+        '<div class="det"><span>Entrada <b>' + fP(o.precio_entrada) + "</b></span><span>Salida <b>" + fP(o.precio_salida) + "</b></span><span>Desde <b>" + fF(o.t_entrada) + "</b></span><span>Hasta <b>" + fF(o.t_salida) + "</b></span><span>Motivo <b>" + o.motivo + "</b></span><span>Tamaño <b>USD " + fN(o.tamano_usd, 0) + "</b></span></div>" +
+        "</div>";
+    }).join("") || '<div class="vacio">Todavía no se cerró ninguna.</div>';
+    else h = Object.keys(MONEDAS).map(function (s) {
+      var e = R.estados[s], nomb = s.replace("USDT", "");
+      if (!e) return '<div class="op"><div class="r1"><span class="m">' + nomb + '</span></div><div class="sub">Sin datos suficientes.</div></div>';
+      var comp = e.cinta_pct < COMPRESION, lect = e.rango === null ? "" : comp ? (e.filtro ? "Lista: una ruptura de las EMA con RSI a favor abre posición." : "Comprimida pero lateral: la señal se descartaría.") : "EMAs abiertas: no hay señal hasta que se compriman.";
+      var mias = ab.filter(function (o) { return o.simbolo === s; });
+      return '<div class="op"><div class="r1"><div><span class="m">' + nomb + '</span> <span class="tag' + (comp && e.filtro ? " vivo" : "") + '">' + (comp && e.filtro ? "lista para señal" : comp ? "lateral" : "sin señal") + '</span></div><div class="res">' + fP(e.precio) + "</div></div>" +
+        '<div class="det"><span>Contra EMA 9 y 50 <b>' + e.posicion + "</b></span><span>RSI <b>" + fN(e.rsi, 0) + "</b></span><span>EMAs comprimidas <b>" + (comp ? "sí" : "no") + " (pct " + Math.round(e.cinta_pct * 100) + ")</b></span><span>Lateral <b>" + (e.rango === null ? "s/d" : e.filtro ? "no" : "sí") + "</b></span>" +
+        (e.rango === null ? "" : "<span>Rango 30 d <b>" + fN(e.rango, 0) + "%</b></span><span>Cruces EMA 50 <b>" + e.cruces + "</b></span>") + "<span>Abiertas ahora <b>" + (mias.length ? mias.length + " " + mias[0].lado + (mias.length > 1 ? "s" : "") : "no") + "</b></span></div>" + '<div class="sub">' + lect + "</div></div>";
+    }).join("");
+    $("lista").innerHTML = h;
+    $("nman").textContent = M.length ? M.length + (M.length === 1 ? " cierre" : " cierres") + " sumando las cuatro cuentas" : "ninguno";
+    if (M.length && !guarda) $("msgman").textContent = "Atención: este navegador no está guardando los cierres. Si cerrás la página se pierden; copiá el código y guardalo.";
+  }
+  $("lista").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-acc]"); if (!b) return;
+    var acc = b.getAttribute("data-acc"), sm = b.getAttribute("data-s"), te = +b.getAttribute("data-te");
+    if (acc === "pedir") { pidiendo = sm + "|" + te; pintar(); }
+    else if (acc === "no") { pidiendo = null; pintar(); }
+    else if (acc === "si") {
+      // la misma operacion (misma moneda y misma entrada) se cierra en todas las cuentas que la tengan abierta, al mismo precio y momento
+      var dd = DAT[sm], ub = dd.enCurso ? dd.enCurso[0] : dd.velas[dd.velas.length - 1][0], t = Math.min(Math.floor(Date.now() / 1000), ub + H4 - 1), pr = +b.getAttribute("data-p");
+      REGLAS.forEach(function (r) {
+        if (abiertaEn(r[0], sm, te) && !M.some(function (m) { return m.r === r[0] && m.s === sm && m.te === te; })) M.push({ r: r[0], s: sm, te: te, t: t, p: pr });
+      });
+      pidiendo = null; guardarM(); recalcular();
+    }
+  });
+  $("copiar").addEventListener("click", function () {
+    var c = aCodigo(M); $("codigo").value = c;
+    if (!c) { $("msgman").textContent = "Todavía no hay cierres a mano para copiar."; return; }
+    $("msgman").textContent = "El código quedó en el recuadro de abajo."; var listo = function () { $("msgman").textContent = "Código copiado."; }, aMano = function () { $("codigo").focus(); $("codigo").select(); $("msgman").textContent = "Mantené apretado sobre el texto y elegí Copiar."; };
+    try { navigator.clipboard.writeText(c).then(listo, aMano); } catch (e) { aMano(); }
+  });
+  $("importar").addEventListener("click", function () {
+    var n = deCodigo($("codigo").value);
+    if (!n.length) { $("msgman").textContent = "No encontré cierres en el texto pegado."; return; }
+    n.forEach(function (x) { if (!M.some(function (m) { return m.r === x.r && m.s === x.s && m.te === x.te; })) M.push(x); });
+    guardarM(); recalcular(); $("msgman").textContent = "Cargados " + n.length + (n.length === 1 ? " cierre." : " cierres.");
+  });
+  // "en vivo desde": la primera vez que se abre esta pagina; se puede cambiar para que coincida con la PC
+  var g = lsGet("vivo_desde"); if (!g) { var hoy = new Date(Date.now() - 3 * 3600 * 1000); g = hoy.getUTCFullYear() + "-" + p2(hoy.getUTCMonth() + 1) + "-" + p2(hoy.getUTCDate()); lsSet("vivo_desde", g); }
+  function fijarVivo(v) { var m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(v); if (!m) return; vivoTs = Date.UTC(+m[1], +m[2] - 1, +m[3]) / 1000 + 3 * 3600; }
+  $("vivo").value = g; fijarVivo(g);
+  $("vivo").addEventListener("change", function () { if (this.value) { lsSet("vivo_desde", this.value); fijarVivo(this.value); pintar(); } });
+  $("act").addEventListener("click", actualizar);
+  $("reglas").addEventListener("click", function (e) { var b = e.target.closest("button"); if (b) { regla = b.getAttribute("data-k"); lsSet("regla", regla); pintar(); } });
+  $("tabs").addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b) return; tab = b.getAttribute("data-t"); [].forEach.call($("tabs").children, function (c) { c.setAttribute("aria-pressed", c === b); }); pintar(); });
+  var rg = lsGet("regla"); if (rg && REGLAS.some(function (r) { return r[0] === rg; })) regla = rg;
+  setInterval(function () { if (!document.hidden) actualizar(); }, 300000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && Date.now() - ultimo > 120000) actualizar(); });
+  actualizar();
+})();
+</script>
+</body>
+</html>
