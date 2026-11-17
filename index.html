@@ -74,6 +74,7 @@ textarea { font: 12px var(--fn); color: var(--fg); background: var(--bg); border
 .sl.pos { color: var(--win); background: color-mix(in srgb, var(--win) 15%, transparent); }
 .sl.neg { color: var(--loss); background: color-mix(in srgb, var(--loss) 15%, transparent); }
 .resumen { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 13.5px; }
+summary { cursor: pointer; color: var(--fg); font-size: 13.5px; }
 .vacio { color: var(--muted); padding: 18px 12px; text-align: center; background: var(--panel); border: 1px dashed var(--line); border-radius: 12px; }
 footer { color: var(--muted); font-size: 12.5px; display: flex; flex-direction: column; gap: 8px; }
 footer label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -103,13 +104,21 @@ input[type=date] { font: inherit; color: var(--fg); background: var(--panel); bo
   <footer>
     <div class="caja">
       <div><b style="color:var(--fg)">Cierres a mano</b> · <span id="nman">ninguno</span></div>
-      <div>Para que el bot de la PC cierre las mismas posiciones, copiá el código y pegalo en el archivo <b>cierres_manuales.txt</b> de la carpeta bot_simulado. También sirve para pasar los cierres a otro teléfono o navegador.</div>
-      <div class="fila"><button type="button" id="copiar">Copiar código</button><button type="button" id="importar">Cargar el código pegado</button></div>
-      <textarea id="codigo" aria-label="Código de cierres a mano" placeholder="Acá aparece el código al copiar. Para cargar cierres hechos en otro dispositivo, pegalo acá y tocá Cargar."></textarea>
+      <div id="sync">Sin clave de GitHub: los cierres quedan solo en este dispositivo.</div>
+      <div>Con la clave cargada, cada cierre se guarda en tu repositorio Bot-simulado y lo toman solos el bot de la PC y tus otros dispositivos. La clave queda guardada solo en este navegador.</div>
+      <div class="fila"><input type="password" id="token" autocomplete="off" spellcheck="false" placeholder="Pegá acá la clave (github_pat_…)" aria-label="Clave de GitHub" style="flex:1;min-width:0;font:13px var(--fn);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;min-height:40px"><button type="button" id="guardartk">Guardar clave</button><button type="button" id="quitartk" hidden>Quitar</button></div>
+      <details>
+        <summary>Pasar cierres sin clave</summary>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+          <div>Copiá el código y pegalo en el archivo <b>cierres_manuales.txt</b> de la carpeta bot_simulado, o cargalo en otro dispositivo.</div>
+          <div class="fila"><button type="button" id="copiar">Copiar código</button><button type="button" id="importar">Cargar el código pegado</button></div>
+          <textarea id="codigo" aria-label="Código de cierres a mano" placeholder="Acá aparece el código al copiar. Para cargar cierres hechos en otro dispositivo, pegalo acá y tocá Cargar."></textarea>
+        </div>
+      </details>
       <div id="msgman"></div>
     </div>
     <label for="vivo">Prueba en vivo desde <input type="date" id="vivo"></label>
-    <div>Operaciones ficticias con precios reales de Binance Futuros, sin dinero. Podés cerrar una posición a mano desde la pestaña Abiertas: se cierra al precio que muestra el panel en ese momento, en todas las cuentas que la tengan abierta, y no se puede deshacer. Esta página hace sola las mismas cuentas que el bot de la PC: no necesita que la computadora esté prendida. Cuenta simulada desde el 1/9/2026, USD 2.000 por regla, 1% de riesgo por posición. Horarios de Buenos Aires. Se actualiza sola cada 5 minutos mientras esté abierta.</div>
+    <div>Operaciones ficticias con precios reales de Binance Futuros, sin dinero. Podés cerrar una posición a mano desde la pestaña Abiertas: se cierra al precio que muestra el panel en ese momento, en todas las cuentas que la tengan abierta, y no se puede deshacer. Con la clave de GitHub cargada, el bot de la PC hace el mismo cierre en su próximo ciclo (cada 15 minutos). Esta página hace sola las mismas cuentas que el bot de la PC: no necesita que la computadora esté prendida. Cuenta simulada desde el 1/9/2026, USD 2.000 por regla, 1% de riesgo por posición. Horarios de Buenos Aires. Se actualiza sola cada 5 minutos mientras esté abierta.</div>
   </footer>
 </main>
 
@@ -273,6 +282,52 @@ if (typeof module !== "undefined") module.exports = { calcular: calcular, resume
   function guardarM() { lsSet("cierres_manuales", aCodigo(M)); guarda = lsGet("cierres_manuales") === aCodigo(M); }
   function abiertaEn(k, sm, te) { return R.cuentas[k].some(function (o) { return o.estado === "abierta" && o.simbolo === sm && o.t_entrada === te; }); }
   function enCuantas(sm, te) { return REGLAS.filter(function (r) { return abiertaEn(r[0], sm, te); }).length; }
+  // ---- sincronizacion con GitHub (archivo cierres_manuales.txt del repositorio)
+  var API = "https://api.github.com/repos/salterbrian12/Bot-simulado/contents/cierres_manuales.txt", tk = lsGet("gh_token") || "", syncando = false, vivoLocal = false;
+  function igual(a, b) { return a.r === b.r && a.s === b.s && a.te === b.te; }
+  function textoArchivo() {
+    return ["# Cierres a mano del bot simulado: regla|moneda|entrada|momento|precio. Lo escribe el panel web; el bot de la PC lo lee solo."]
+      .concat($("vivo").value ? ["vivo|" + $("vivo").value] : []).concat(M.map(function (m) { return [m.r, m.s, m.te, m.t, m.p].join("|"); })).join("\n") + "\n";
+  }
+  function leerRemoto() {
+    var h = { Accept: "application/vnd.github+json" }; if (tk) h.Authorization = "Bearer " + tk;
+    return fetch(API + "?ref=main&t=" + Date.now(), { headers: h, cache: "no-store" }).then(function (r) {
+      if (r.status === 404) return { sha: null, texto: "" };
+      if (r.status === 401) throw new Error("la clave no es válida o venció");
+      if (!r.ok) throw new Error("GitHub respondió " + r.status);
+      return r.json().then(function (j) { return { sha: j.sha, texto: atob(String(j.content || "").replace(/\s/g, "")) }; });
+    });
+  }
+  function subir(sha) {
+    var cuerpo = { message: "Cierres a mano desde el panel", content: btoa(textoArchivo()), branch: "main" }; if (sha) cuerpo.sha = sha;
+    return fetch(API, { method: "PUT", headers: { Accept: "application/vnd.github+json", Authorization: "Bearer " + tk, "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) }).then(function (r) {
+      if (r.status === 401) throw new Error("la clave no es válida o venció");
+      if (r.status === 403 || r.status === 404) throw new Error("la clave no tiene permiso de escritura sobre Bot-simulado");
+      if (r.status === 409 || r.status === 422) { var e = new Error("conflicto"); e.conflicto = true; throw e; }
+      if (!r.ok) throw new Error("GitHub respondió " + r.status);
+    });
+  }
+  function hhmm() { var d = new Date(Date.now() - 3 * 3600 * 1000); return p2(d.getUTCHours()) + ":" + p2(d.getUTCMinutes()); }
+  function sincronizar(intento) {
+    if (syncando) return; syncando = true; intento = intento || 0;
+    leerRemoto().then(function (rm) {
+      var rem = deCodigo(rm.texto), nuevos = 0, v = /(^|\n)vivo\|(\d{4}-\d\d-\d\d)/.exec(rm.texto);
+      rem.forEach(function (x) { if (!M.some(function (m) { return igual(m, x); })) { M.push(x); nuevos++; } });
+      if (nuevos) guardarM();
+      if (v && !vivoLocal && v[2] !== $("vivo").value) { $("vivo").value = v[2]; lsSet("vivo_desde", v[2]); fijarVivo(v[2]); nuevos++; }
+      if (nuevos) recalcular();
+      var faltan = M.filter(function (m) { return !rem.some(function (x) { return igual(m, x); }); }).length, vivoDif = !v || v[2] !== $("vivo").value;
+      if (!tk) {
+        $("sync").innerHTML = faltan ? '<span class="neg">Hay ' + faltan + " cierre" + (faltan > 1 ? "s" : "") + " que la PC todavía no tiene.</span> Cargá la clave de GitHub para enviarlos." : "Sin clave: este dispositivo lee los cierres de GitHub pero no puede enviar los suyos.";
+        return;
+      }
+      if (faltan || vivoDif) return subir(rm.sha).then(function () { vivoLocal = false; $("sync").innerHTML = '<span class="pos">Sincronizado con la PC</span> · ' + hhmm(); });
+      vivoLocal = false; $("sync").innerHTML = '<span class="pos">Sincronizado con la PC</span> · ' + hhmm();
+    }).catch(function (e) {
+      if (e && e.conflicto && intento < 2) { syncando = false; return sincronizar(intento + 1); }
+      $("sync").innerHTML = '<span class="neg">No pude sincronizar: ' + (e && e.message ? e.message : "sin conexión") + ".</span> Los cierres quedan guardados acá y se reintenta en la próxima actualización.";
+    }).then(function () { syncando = false; });
+  }
   function recalcular() { if (DAT) { R = calcular(DAT, FUN, porRegla()); pintar(); } }
   M = deCodigo(lsGet("cierres_manuales"));
   function pedir(ruta) {
@@ -314,7 +369,7 @@ if (typeof module !== "undefined") module.exports = { calcular: calcular, resume
     Promise.all(sims.map(function (s) { return traerVelas(s).then(function (d) { datos[s] = d; }); }))
       .then(function () { return Promise.all(sims.map(function (s) { return traerFunding(s).then(function (f) { funding[s] = f; }, function () { sinFunding = true; }); })); })
       .then(function () {
-        DAT = datos; FUN = funding; R = calcular(datos, funding, porRegla()); ultimo = Date.now(); $("aviso").hidden = !sinFunding;
+        DAT = datos; FUN = funding; R = calcular(datos, funding, porRegla()); ultimo = Date.now(); sincronizar(); $("aviso").hidden = !sinFunding;
         if (sinFunding) $("aviso").textContent = "No pude leer el costo de financiación (funding) de alguna moneda: los resultados cerrados pueden diferir unos centavos de los de la PC.";
         pintar();
       })
@@ -392,7 +447,7 @@ if (typeof module !== "undefined") module.exports = { calcular: calcular, resume
       REGLAS.forEach(function (r) {
         if (abiertaEn(r[0], sm, te) && !M.some(function (m) { return m.r === r[0] && m.s === sm && m.te === te; })) M.push({ r: r[0], s: sm, te: te, t: t, p: pr });
       });
-      pidiendo = null; guardarM(); recalcular();
+      pidiendo = null; guardarM(); recalcular(); sincronizar();
     }
   });
   $("copiar").addEventListener("click", function () {
@@ -405,13 +460,20 @@ if (typeof module !== "undefined") module.exports = { calcular: calcular, resume
     var n = deCodigo($("codigo").value);
     if (!n.length) { $("msgman").textContent = "No encontré cierres en el texto pegado."; return; }
     n.forEach(function (x) { if (!M.some(function (m) { return m.r === x.r && m.s === x.s && m.te === x.te; })) M.push(x); });
-    guardarM(); recalcular(); $("msgman").textContent = "Cargados " + n.length + (n.length === 1 ? " cierre." : " cierres.");
+    guardarM(); recalcular(); sincronizar(); $("msgman").textContent = "Cargados " + n.length + (n.length === 1 ? " cierre." : " cierres.");
   });
   // "en vivo desde": la primera vez que se abre esta pagina; se puede cambiar para que coincida con la PC
   var g = lsGet("vivo_desde"); if (!g) { var hoy = new Date(Date.now() - 3 * 3600 * 1000); g = hoy.getUTCFullYear() + "-" + p2(hoy.getUTCMonth() + 1) + "-" + p2(hoy.getUTCDate()); lsSet("vivo_desde", g); }
   function fijarVivo(v) { var m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(v); if (!m) return; vivoTs = Date.UTC(+m[1], +m[2] - 1, +m[3]) / 1000 + 3 * 3600; }
   $("vivo").value = g; fijarVivo(g);
-  $("vivo").addEventListener("change", function () { if (this.value) { lsSet("vivo_desde", this.value); fijarVivo(this.value); pintar(); } });
+  $("vivo").addEventListener("change", function () { if (this.value) { lsSet("vivo_desde", this.value); fijarVivo(this.value); pintar(); vivoLocal = true; if (tk) sincronizar(); } });
+  function mostrarTk() { $("quitartk").hidden = !tk; $("token").value = ""; $("token").placeholder = tk ? "Clave cargada (" + tk.slice(-4) + ")" : "Pegá acá la clave (github_pat_…)"; }
+  $("guardartk").addEventListener("click", function () {
+    var v = $("token").value.trim(); if (!v) { $("msgman").textContent = "Pegá la clave en el recuadro y tocá Guardar."; return; }
+    tk = v; lsSet("gh_token", v); mostrarTk(); $("msgman").textContent = "Clave guardada en este navegador."; $("sync").textContent = "Sincronizando…"; sincronizar();
+  });
+  $("quitartk").addEventListener("click", function () { tk = ""; try { localStorage.removeItem("gh_token"); } catch (e) {} mostrarTk(); $("msgman").textContent = "Clave quitada de este navegador."; sincronizar(); });
+  mostrarTk();
   $("act").addEventListener("click", actualizar);
   $("reglas").addEventListener("click", function (e) { var b = e.target.closest("button"); if (b) { regla = b.getAttribute("data-k"); lsSet("regla", regla); pintar(); } });
   $("tabs").addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b) return; tab = b.getAttribute("data-t"); [].forEach.call($("tabs").children, function (c) { c.setAttribute("aria-pressed", c === b); }); pintar(); });
