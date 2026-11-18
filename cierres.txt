@@ -1,0 +1,2 @@
+# Cierres a mano del bot simulado: regla|moneda|entrada|momento|precio. Lo escribe el panel web; el bot de la PC lo lee solo.
+vivo|2026-11-13

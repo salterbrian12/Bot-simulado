@@ -110,7 +110,7 @@ input[type=date] { font: inherit; color: var(--fg); background: var(--panel); bo
       <details>
         <summary>Pasar cierres sin clave</summary>
         <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
-          <div>Copiá el código y pegalo en el archivo <b>cierres_manuales.txt</b> de la carpeta bot_simulado, o cargalo en otro dispositivo.</div>
+          <div>Copiá el código y pegalo en el archivo <b>cierres_pegados.txt</b> de la carpeta bot_simulado, o cargalo en otro dispositivo.</div>
           <div class="fila"><button type="button" id="copiar">Copiar código</button><button type="button" id="importar">Cargar el código pegado</button></div>
           <textarea id="codigo" aria-label="Código de cierres a mano" placeholder="Acá aparece el código al copiar. Para cargar cierres hechos en otro dispositivo, pegalo acá y tocá Cargar."></textarea>
         </div>
@@ -279,11 +279,11 @@ if (typeof module !== "undefined") module.exports = { calcular: calcular, resume
     return out;
   }
   function porRegla() { var o = {}; REGLAS.forEach(function (r) { o[r[0]] = {}; }); M.forEach(function (m) { o[m.r][m.s + "|" + m.te] = [m.t, m.p]; }); return o; }
-  function guardarM() { lsSet("cierres_manuales", aCodigo(M)); guarda = lsGet("cierres_manuales") === aCodigo(M); }
+  function guardarM() { lsSet("cierres_v2", aCodigo(M)); guarda = lsGet("cierres_v2") === aCodigo(M); }
   function abiertaEn(k, sm, te) { return R.cuentas[k].some(function (o) { return o.estado === "abierta" && o.simbolo === sm && o.t_entrada === te; }); }
   function enCuantas(sm, te) { return REGLAS.filter(function (r) { return abiertaEn(r[0], sm, te); }).length; }
-  // ---- sincronizacion con GitHub (archivo cierres_manuales.txt del repositorio)
-  var API = "https://api.github.com/repos/salterbrian12/Bot-simulado/contents/cierres_manuales.txt", tk = lsGet("gh_token") || "", syncando = false, vivoLocal = false;
+  // ---- sincronizacion con GitHub (archivo cierres.txt del repositorio)
+  var API = "https://api.github.com/repos/salterbrian12/Bot-simulado/contents/cierres.txt", tk = lsGet("gh_token") || "", syncando = false, vivoLocal = false;
   function igual(a, b) { return a.r === b.r && a.s === b.s && a.te === b.te; }
   function textoArchivo() {
     return ["# Cierres a mano del bot simulado: regla|moneda|entrada|momento|precio. Lo escribe el panel web; el bot de la PC lo lee solo."]
@@ -329,7 +329,7 @@ if (typeof module !== "undefined") module.exports = { calcular: calcular, resume
     }).then(function () { syncando = false; });
   }
   function recalcular() { if (DAT) { R = calcular(DAT, FUN, porRegla()); pintar(); } }
-  M = deCodigo(lsGet("cierres_manuales"));
+  M = deCodigo(lsGet("cierres_v2"));   // v2: los cierres anteriores al 17/11/2026 se anularon
   function pedir(ruta) {
     var c = new AbortController(), t = setTimeout(function () { c.abort(); }, 25000);
     return fetch(BASE + ruta, { signal: c.signal }).then(function (r) { clearTimeout(t); if (!r.ok) throw new Error("Binance respondió " + r.status); return r.json(); }, function (e) { clearTimeout(t); throw e; });
