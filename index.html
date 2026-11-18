@@ -130,8 +130,8 @@ var COSTO = { BTCUSDT: 0.0014, ETHUSDT: 0.0014 }, COSTO_OTRAS = 0.0020;
 var ANCLA = Date.UTC(2025, 0, 1) / 1000, INICIO_CUENTA = Date.UTC(2026, 8, 1) / 1000, H4 = 4 * 3600;
 var F_RANGO = 25.84, F_EFIC = 0.0966, F_CRUCES = 7;
 var REGLAS = [
-  ["movil60", "Stop móvil, 60 días", { filtro: true, varias: true, movil: 1.5, max_velas: 360 }],
   ["cuidada", "Stop móvil 60 días + entradas cuidadas", { filtro: true, varias: true, movil: 1.5, max_velas: 360, max_ema50: 3.0, stop_min_atr: 4.5 }],
+  ["movil60", "Stop móvil, 60 días", { filtro: true, varias: true, movil: 1.5, max_velas: 360 }],
   ["objmovil60", "Stop móvil + objetivo móvil, 60 días", { filtro: true, varias: true, movil: 1.5, max_velas: 360, tp_movil: 3.0 }],
   ["objmovil30", "Stop móvil + objetivo móvil, 30 días", { filtro: true, varias: true, movil: 1.5, tp_movil: 3.0 }]
 ];
@@ -259,7 +259,7 @@ if (typeof module !== "undefined") module.exports = { calcular: calcular, resume
 <script>
 (function () {
   var BASE = "https://fapi.binance.com", $ = function (id) { return document.getElementById(id); };
-  var R = null, regla = "movil60", tab = "ab", ocupado = false, ultimo = 0, vivoTs = 0, DAT = null, FUN = null, M = [], pidiendo = null, guarda = true;
+  var R = null, regla = "cuidada", tab = "ab", ocupado = false, ultimo = 0, vivoTs = 0, DAT = null, FUN = null, M = [], pidiendo = null, guarda = true;
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   function fN(x, d) { return x.toLocaleString("es-AR", { minimumFractionDigits: d, maximumFractionDigits: d }); }
@@ -475,9 +475,9 @@ if (typeof module !== "undefined") module.exports = { calcular: calcular, resume
   $("quitartk").addEventListener("click", function () { tk = ""; try { localStorage.removeItem("gh_token"); } catch (e) {} mostrarTk(); $("msgman").textContent = "Clave quitada de este navegador."; sincronizar(); });
   mostrarTk();
   $("act").addEventListener("click", actualizar);
-  $("reglas").addEventListener("click", function (e) { var b = e.target.closest("button"); if (b) { regla = b.getAttribute("data-k"); lsSet("regla", regla); pintar(); } });
+  $("reglas").addEventListener("click", function (e) { var b = e.target.closest("button"); if (b) { regla = b.getAttribute("data-k"); lsSet("regla2", regla); pintar(); } });
   $("tabs").addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b) return; tab = b.getAttribute("data-t"); [].forEach.call($("tabs").children, function (c) { c.setAttribute("aria-pressed", c === b); }); pintar(); });
-  var rg = lsGet("regla"); if (rg && REGLAS.some(function (r) { return r[0] === rg; })) regla = rg;
+  var rg = lsGet("regla2"); if (rg && REGLAS.some(function (r) { return r[0] === rg; })) regla = rg;
   setInterval(function () { if (!document.hidden) actualizar(); }, 300000);
   document.addEventListener("visibilitychange", function () { if (!document.hidden && Date.now() - ultimo > 120000) actualizar(); });
   actualizar();
