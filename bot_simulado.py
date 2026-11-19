@@ -6,16 +6,17 @@ Que hace:
   - Cada 15 minutos lee precios publicos de Binance Futuros (sin cuenta ni claves).
   - Aplica reglas fijas sobre velas de 4 horas y decide entradas y salidas.
   - NO opera con dinero: anota operaciones ficticias con un capital simulado.
-  - Lleva CUATRO cuentas en paralelo, cada una con su propio capital, para comparar
-    (las cuatro que mejor resultado dejaron en la prueba historica 2023-2026):
-        1. Stop movil 60 dias + entradas cuidadas            (la regla principal desde el 18/11/2026:
-                                                               mas ganadoras, menor caida y mejor rendimiento anual)
-        2. Stop movil, limite 60 dias                        (la principal anterior)
-        3. Stop movil + objetivo movil, limite 60 dias       (deja correr las ganadoras)
-        4. Stop movil + objetivo movil, limite 30 dias
+  - Lleva CINCO cuentas en paralelo, cada una con su propio capital, para comparar.
+    Las cinco usan la misma regla (stop movil, 60 dias, entradas cuidadas) y cambian solo las EMAs
+    de la senal (las de menor % de perdedoras en la prueba historica 2023-2026):
+        1. EMA 7/50   (la regla principal desde el 19/11/2026)
+        2. EMA 8/50
+        3. EMA 6/50
+        4. EMA 9/50   (la principal hasta el 19/11/2026)
+        5. EMA 7/25
   - Guarda todo en la carpeta "bot_simulado" (al lado de este archivo):
         panel.html         -> abrilo con doble clic para ver el estado
-        operaciones.csv    -> todas las operaciones de las cuatro reglas (el archivo para analizar)
+        operaciones.csv    -> todas las operaciones de las cinco reglas (el archivo para analizar)
         datos/             -> velas descargadas
         config.json        -> fecha de inicio y capital
 
@@ -32,13 +33,14 @@ La cuenta simulada arranca el 1 de septiembre de 2026 para que haya operaciones 
 el primer dia. Lo que pase desde tu primer encendido se marca como "en vivo": esa es la prueba real.
 
 Las reglas (no cambian solas; cualquier ajuste se decide y se valida aparte):
-  - Senal: EMA 9/50/100/200 comprimidas (ancho de la cinta en el 40% mas bajo de los ultimos 90 dias).
-      COMPRA: el precio cierra por encima de las EMA 9 y 50 (la vela anterior no lo hacia) con RSI > 52
-      VENTA : el precio cierra por debajo de las EMA 9 y 50 (la vela anterior no lo hacia) con RSI < 48
+  - Senal: EMAs rapida/lenta/100/200 comprimidas (ancho de la cinta en el 40% mas bajo de los ultimos 90 dias).
+    La rapida y la lenta son las de cada cuenta (en la principal, EMA 7 y EMA 50).
+      COMPRA: el precio cierra por encima de la EMA rapida y la lenta (la vela anterior no lo hacia) con RSI > 52
+      VENTA : el precio cierra por debajo de la EMA rapida y la lenta (la vela anterior no lo hacia) con RSI < 48
   - Filtro de lateralizacion: no se entra si el mercado viene lateral (rango de 30 dias muy amplio,
     ultimos 5 dias de ida y vuelta, o muchos cruces de la EMA 50).
   - Entrada en la apertura de la vela siguiente. Objetivo 15% y stop 5%, escalados por la
-    volatilidad de cada moneda. Salida por tiempo a los 60 dias (30 en la cuenta 4).
+    volatilidad de cada moneda. Salida por tiempo a los 60 dias.
   - Varias posiciones: cada senal abre una posicion nueva, salvo que haya posiciones del lado
     contrario abiertas en esa moneda.
   - Stop movil: al cierre de cada vela de 4 h el stop sigue al precio a 1,5 veces el riesgo inicial.
@@ -50,13 +52,12 @@ Las reglas (no cambian solas; cualquier ajuste se decide y se valida aparte):
   - Cierre a mano: desde el panel web (celular o PC) se puede cerrar una posicion al precio del momento.
     Con la clave de GitHub cargada en el panel, el cierre queda guardado en el repositorio Bot-simulado
     y este bot lo toma solo en el proximo ciclo. Sin clave, pegar el codigo del panel en bot_simulado/cierres_pegados.txt
-  - Objetivo movil (cuentas 3 y 4): el objetivo no queda fijo; se mantiene siempre 3 veces el riesgo
-    por delante del mejor cierre, asi la posicion sale por stop movil o por tiempo y no corta la ganancia.
-  - Entradas cuidadas (solo en la cuenta 1): no entra si el precio ya se alejo mas de 3% de la
+  - Entradas cuidadas (en las cinco cuentas): no entra si el precio ya se alejo mas de 3% de la
     EMA 50 a favor de la senal (ajustado por moneda), y el stop nunca queda a menos de 4,5 ATR:
     con el mercado muy movido el stop se aleja y la posicion se achica, asi el riesgo sigue en 1%.
 """
 
+import bisect
 import csv
 import heapq
 import json
@@ -98,12 +99,16 @@ MAX_DIST_EMA50 = 3.0           # no entra si el precio ya se alejo mas de 3% (aj
 OBJETIVO_MOVIL_R = 3.0          # objetivo movil: queda siempre 3 R por delante del mejor cierre (solo en las reglas que lo usan)
 STOP_MIN_ATR = 4.5             # el stop nunca queda a menos de 4,5 ATR; si se ensancha, la posicion se achica (el riesgo sigue en 1%)
 # Las cuentas que se llevan en paralelo. La primera es la principal.
+CUIDADA = {"filtro": True, "varias": True, "movil": STOP_MOVIL_R, "max_velas": MAX_VELAS_PRINCIPAL, "max_ema50": MAX_DIST_EMA50, "stop_min_atr": STOP_MIN_ATR}
 REGLAS = [
-    ("cuidada", "Stop movil 60 dias + entradas cuidadas", {"filtro": True, "varias": True, "movil": STOP_MOVIL_R, "max_velas": MAX_VELAS_PRINCIPAL, "max_ema50": MAX_DIST_EMA50, "stop_min_atr": STOP_MIN_ATR}),
-    ("movil60", "Stop movil, 60 dias", {"filtro": True, "varias": True, "movil": STOP_MOVIL_R, "max_velas": MAX_VELAS_PRINCIPAL}),
-    ("objmovil60", "Stop movil + objetivo movil, 60 dias", {"filtro": True, "varias": True, "movil": STOP_MOVIL_R, "max_velas": MAX_VELAS_PRINCIPAL, "tp_movil": OBJETIVO_MOVIL_R}),
-    ("objmovil30", "Stop movil + objetivo movil, 30 dias", {"filtro": True, "varias": True, "movil": STOP_MOVIL_R, "tp_movil": OBJETIVO_MOVIL_R}),
+    ("c7_50", "Entradas cuidadas EMA 7/50", CUIDADA),
+    ("c8_50", "Entradas cuidadas EMA 8/50", CUIDADA),
+    ("c6_50", "Entradas cuidadas EMA 6/50", CUIDADA),
+    ("cuidada", "Entradas cuidadas EMA 9/50", CUIDADA),
+    ("c7_25", "Entradas cuidadas EMA 7/25", CUIDADA),
 ]
+# EMA rapida y lenta de la senal de cada cuenta (la cinta de compresion usa esas dos mas la 100 y la 200)
+EMAS = {"c7_50": (7, 50), "c8_50": (8, 50), "c6_50": (6, 50), "cuidada": (9, 50), "c7_25": (7, 25)}
 CADA_SEG = 900
 # ---------------------------------------------------------------------------
 
@@ -248,18 +253,23 @@ def rsi14(cierres):
     return out
 
 
-def indicadores(velas):
+def indicadores(velas, rapida=9, lenta=50):
+    """Cierres, EMA rapida, EMA lenta, percentil del ancho de la cinta (rapida, lenta, 100, 200) en las ultimas
+    VENTANA_CINTA velas, RSI 14 y EMA 50 (para el filtro de lateralizacion)."""
     c = [v[4] for v in velas]
-    e9, e50, e100, e200 = ema(c, 9), ema(c, 50), ema(c, 100), ema(c, 200)
-    cinta = [(max(e9[i], e50[i], e100[i], e200[i]) - min(e9[i], e50[i], e100[i], e200[i])) / c[i] for i in range(len(c))]
+    ef, el, e100, e200 = ema(c, rapida), ema(c, lenta), ema(c, 100), ema(c, 200)
+    e50 = el if lenta == 50 else ema(c, 50)
+    cinta = [(max(ef[i], el[i], e100[i], e200[i]) - min(ef[i], el[i], e100[i], e200[i])) / c[i] for i in range(len(c))]
     pct = [None] * len(c)
+    orden = sorted(cinta[:VENTANA_CINTA - 1])
     for i in range(VENTANA_CINTA - 1, len(c)):
-        w = cinta[i - VENTANA_CINTA + 1:i + 1]
         x = cinta[i]
-        menores = sum(1 for y in w if y < x)
-        iguales = sum(1 for y in w if y == x)
-        pct[i] = (menores + (iguales + 1) / 2.0) / VENTANA_CINTA
-    return c, e9, e50, pct, rsi14(c)
+        bisect.insort(orden, x)
+        if i >= VENTANA_CINTA:
+            del orden[bisect.bisect_left(orden, cinta[i - VENTANA_CINTA])]
+        a, b = bisect.bisect_left(orden, x), bisect.bisect_right(orden, x)
+        pct[i] = (a + (b - a + 1) / 2.0) / VENTANA_CINTA
+    return c, ef, el, pct, rsi14(c), e50
 
 
 def extras(velas, k=1.0):
@@ -287,16 +297,17 @@ def lateral(velas, c, e50, i, k):
     return (rango <= FILTRO_RANGO_30D and efic >= FILTRO_EFICIENCIA_5D and cruces <= FILTRO_CRUCES_10D), rango, efic, cruces
 
 
-def senales(velas, k=1.0):
-    """Lista con +1 (compra), -1 (venta) o 0 para cada vela cerrada, mas el estado de la ultima."""
-    c, e9, e50, pct, rsi = indicadores(velas)
+def senales(velas, k=1.0, rapida=9, lenta=50):
+    """Lista con +1 (compra), -1 (venta) o 0 para cada vela cerrada, mas el estado de la ultima.
+    e9/e50 son aca la EMA rapida y la lenta de la cuenta; el filtro lateral usa siempre la EMA 50 real."""
+    c, e9, el, pct, rsi, e50 = indicadores(velas, rapida, lenta)
     s = [0] * len(c)
     filtro = {}
     for i in range(1, len(c)):
         if pct[i] is None or rsi[i] is None or pct[i] >= COMPRESION:
             continue
-        arr, arr_prev = c[i] > max(e9[i], e50[i]), c[i - 1] > max(e9[i - 1], e50[i - 1])
-        aba, aba_prev = c[i] < min(e9[i], e50[i]), c[i - 1] < min(e9[i - 1], e50[i - 1])
+        arr, arr_prev = c[i] > max(e9[i], el[i]), c[i - 1] > max(e9[i - 1], el[i - 1])
+        aba, aba_prev = c[i] < min(e9[i], el[i]), c[i - 1] < min(e9[i - 1], el[i - 1])
         if arr and not arr_prev and rsi[i] > 52:
             s[i] = 1
         elif aba and not aba_prev and rsi[i] < 48:
@@ -306,8 +317,8 @@ def senales(velas, k=1.0):
     i = len(c) - 1
     estado = None
     if i >= 0 and pct[i] is not None:
-        estado = {"precio": c[i], "ema9": e9[i], "ema50": e50[i], "cinta_pct": pct[i], "rsi": rsi[i],
-                  "posicion": "arriba" if c[i] > max(e9[i], e50[i]) else "abajo" if c[i] < min(e9[i], e50[i]) else "entre"}
+        estado = {"precio": c[i], "ema_rapida": e9[i], "ema_lenta": el[i], "ema50": e50[i], "cinta_pct": pct[i], "rsi": rsi[i],
+                  "posicion": "arriba" if c[i] > max(e9[i], el[i]) else "abajo" if c[i] < min(e9[i], el[i]) else "entre"}
         estado["filtro"], estado["rango"], estado["eficiencia"], estado["cruces"] = lateral(velas, c, e50, i, k)
     return s, estado, filtro
 
@@ -615,7 +626,7 @@ def escribir_panel(cuentas, vivo_ts, estados, inicio_ts, errores):
              ".sub-tabs button[aria-selected=true]{background:#e4e8ee;color:#12161d;border-color:#e4e8ee;font-weight:600}button:focus-visible{outline:2px solid #6ea0ff;outline-offset:2px}"
              ".tag{font-size:11px;background:#24406f;color:#cfe0ff;border-radius:999px;padding:2px 8px;vertical-align:middle;margin-left:6px}.dos{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}[hidden]{display:none!important}</style></head><body>")
     h.append("<h1>Bot simulado &middot; regla de 4 horas</h1><div class='sub'>Operaciones ficticias con precios reales, sin dinero. Cuenta simulada desde %s &middot; prueba en vivo desde %s &middot; actualizado %s (hora de Buenos Aires) &middot; versi&oacute;n %s</div>" % (fecha(inicio_ts), fecha(vivo_ts), fecha(ahora()), VERSION))
-    h.append("<div class='sub' style='margin-top:4px'>Cierres a mano: %d en total entre las cuatro cuentas%s. Las operaciones &laquo;hist&oacute;rica&raquo; entraron antes de tu primer encendido; las &laquo;en vivo&raquo; son la prueba real.</div>" % (SYNC["n"], {True: " &middot; sincronizados con el panel del celular", False: " &middot; <span class='neg'>no pude leer GitHub, uso la &uacute;ltima copia guardada</span>", None: ""}[SYNC["ok"]]))
+    h.append("<div class='sub' style='margin-top:4px'>Cierres a mano: %d en total entre las cinco cuentas%s. Las operaciones &laquo;hist&oacute;rica&raquo; entraron antes de tu primer encendido; las &laquo;en vivo&raquo; son la prueba real.</div>" % (SYNC["n"], {True: " &middot; sincronizados con el panel del celular", False: " &middot; <span class='neg'>no pude leer GitHub, uso la &uacute;ltima copia guardada</span>", None: ""}[SYNC["ok"]]))
     if errores:
         h.append("<div class='av'>Sin conexi&oacute;n para: %s. Se muestran los &uacute;ltimos datos guardados.</div>" % ", ".join(errores))
     # solapas: una por regla, mas la comparacion y el estado de las monedas
@@ -625,7 +636,7 @@ def escribir_panel(cuentas, vivo_ts, estados, inicio_ts, errores):
         pc = (x["capital"] / CAPITAL_INICIAL - 1) * 100
         h.append("<button type='button' data-r='%s'>%d. %s<small>USD %s &middot; <span class='%s'>%s%%</span> &middot; %d abiertas</small></button>" % (
             clave, n, nombre.replace("movil", "m&oacute;vil").replace("dias", "d&iacute;as"), n2(x["capital"], 0), pn(pc), ("+" if pc >= 0 else "") + n2(pc, 1), x["abiertas"]))
-    h.append("<button type='button' data-r='comparar'>Comparar<small>las cuatro, lado a lado</small></button><button type='button' data-r='monedas'>Monedas<small>estado de cada una</small></button></nav>")
+    h.append("<button type='button' data-r='comparar'>Comparar<small>las cinco, lado a lado</small></button><button type='button' data-r='monedas'>Monedas<small>estado de cada una</small></button></nav>")
     for clave, nombre, _ in REGLAS:
         h.append(seccion_regla(clave, nombre, cuentas[clave], vivo_ts, clave == principal))
     # comparacion
@@ -643,7 +654,7 @@ def escribir_panel(cuentas, vivo_ts, estados, inicio_ts, errores):
             len(viv), ("%d (%d ganadoras)" % (len(vc), sum(1 for o in vc if o["usd"] > 0))) if vc else "0", pn(vu), n2(vu)))
     h.append("</table></div></section>")
     # monedas
-    h.append("<section class='extra' id='r-monedas'><h2>Estado de cada moneda</h2><div class='wrap'><table><tr><th>Moneda</th><th>Precio</th><th>Contra EMA 9 y 50</th><th>RSI</th><th>Compresi&oacute;n de EMAs</th><th>Mercado lateral</th><th>Lectura</th></tr>")
+    h.append("<section class='extra' id='r-monedas'><h2>Estado de cada moneda</h2><div class='wrap'><table><tr><th>Moneda</th><th>Precio</th><th>Contra EMA 7 y 50</th><th>RSI</th><th>Compresi&oacute;n de EMAs</th><th>Mercado lateral</th><th>Lectura</th></tr>")
     for sim in MONEDAS:
         e = estados.get(sim)
         if not e:
@@ -666,7 +677,7 @@ def escribir_panel(cuentas, vivo_ts, estados, inicio_ts, errores):
 
 
 # ------------------------------ CICLO ------------------------------
-VERSION = "2026-11-18b"            # cambia con cada version nueva; se muestra en el panel
+VERSION = "2026-11-19"            # cambia con cada version nueva; se muestra en el panel
 CODIGO_GITHUB = "https://raw.githubusercontent.com/salterbrian12/Bot-simulado/main/bot_simulado.py"
 
 
@@ -797,11 +808,14 @@ def ciclo(avisar=True):
             errores.append(sim.replace("USDT", ""))
         if len(velas) < VENTANA_CINTA + 5:
             continue
-        pre = senales(velas, MONEDAS[sim])
         extra = extras(velas, MONEDAS[sim])
-        estados[sim] = pre[1]
+        pres = {}
         for clave, _, kw in REGLAS:
-            cuentas[clave].extend(simular(sim, velas, en_curso, inicio, pre=pre, extra=extra, manuales=manuales[clave], **kw)[0])
+            par = EMAS.get(clave, (9, 50))
+            if par not in pres:
+                pres[par] = senales(velas, MONEDAS[sim], *par)
+            cuentas[clave].extend(simular(sim, velas, en_curso, inicio, pre=pres[par], extra=extra, manuales=manuales[clave], **kw)[0])
+        estados[sim] = pres[EMAS.get(REGLAS[0][0], (9, 50))][1]
     for clave in cuentas:
         cuentas[clave] = cuenta(cuentas[clave], fcache, not errores)
     guardar_json("funding.json", fcache)
@@ -826,7 +840,7 @@ def main():
     una_vez = "--una-vez" in sys.argv
     con_ventana = sys.stdout is not None and hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
     if con_ventana:
-        print("BOT SIMULADO - regla de 4 horas, cuatro cuentas en paralelo. No opera con dinero real.")
+        print("BOT SIMULADO - regla de 4 horas, cinco cuentas en paralelo. No opera con dinero real.")
         print("Carpeta de trabajo:", CARPETA)
         print("La primera vez descarga historial y puede tardar un minuto.\n")
     primera = True

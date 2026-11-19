@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%2310141b'/%3E%3Cpath d='M36 132l40-40 28 24 52-60' fill='none' stroke='%235fd66c' stroke-width='16' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <meta name="mobile-web-app-capable" content="yes">
 <style>
-/* Panel para celular: una columna. Arriba las cuatro cuentas para elegir, despues el detalle de la elegida. */
+/* Panel para celular: una columna. Arriba las cinco cuentas para elegir, despues el detalle de la elegida. */
 :root {
   --bg: #10141b; --panel: #181d26; --panel2: #1f2531; --line: #2a313d; --fg: #e6eaf0; --muted: #8d98a8;
   --accent: #6ea0ff; --win: #5fd66c; --loss: #f0736e; --warn-bg: #3a2a12; --warn-line: #6b4a12; --track: #2a313d;
@@ -35,14 +35,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 #act { background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 600; min-height: 44px; }
 #act[disabled] { opacity: .55; }
 .aviso { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; }
-.reglas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.reglas { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .regla { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .regla[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--panel2); }
 .regla .n { font-size: 12.5px; color: var(--muted); min-height: 2.8em; }
 .regla .c { font: 600 18px var(--fn); font-variant-numeric: tabular-nums; }
 .regla .d { font: 12.5px var(--fn); font-variant-numeric: tabular-nums; }
 .kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-@media (min-width: 560px) { .kpis { grid-template-columns: repeat(4, 1fr); } .reglas { grid-template-columns: repeat(4, 1fr); } }
+@media (min-width: 560px) { .kpis { grid-template-columns: repeat(4, 1fr); } }
 .kpis div { background: var(--panel); padding: 10px 12px; min-width: 0; }
 .kpis span { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
 .kpis b { font: 600 17px var(--fn); font-variant-numeric: tabular-nums; }
@@ -88,7 +88,7 @@ input[type=date] { font: inherit; color: var(--fg); background: var(--panel); bo
     <button id="act" type="button">Actualizar</button>
   </header>
   <div class="aviso" id="aviso" hidden></div>
-  <section><h2>Las cuatro cuentas</h2><div class="reglas" id="reglas"></div></section>
+  <section><h2>Las cinco cuentas</h2><div class="reglas" id="reglas"></div></section>
   <section id="detalle" hidden>
     <h2 id="titulo"></h2>
     <div class="kpis" id="kpis"></div>
@@ -129,23 +129,28 @@ var MONEDAS = { BTCUSDT: 1.000, ETHUSDT: 1.140, SOLUSDT: 2.538, BNBUSDT: 1.148, 
 var COSTO = { BTCUSDT: 0.0014, ETHUSDT: 0.0014 }, COSTO_OTRAS = 0.0020;
 var ANCLA = Date.UTC(2025, 0, 1) / 1000, INICIO_CUENTA = Date.UTC(2026, 8, 1) / 1000, H4 = 4 * 3600;
 var F_RANGO = 25.84, F_EFIC = 0.0966, F_CRUCES = 7;
+var CUIDADA = { filtro: true, varias: true, movil: 1.5, max_velas: 360, max_ema50: 3.0, stop_min_atr: 4.5 };
 var REGLAS = [
-  ["cuidada", "Stop móvil 60 días + entradas cuidadas", { filtro: true, varias: true, movil: 1.5, max_velas: 360, max_ema50: 3.0, stop_min_atr: 4.5 }],
-  ["movil60", "Stop móvil, 60 días", { filtro: true, varias: true, movil: 1.5, max_velas: 360 }],
-  ["objmovil60", "Stop móvil + objetivo móvil, 60 días", { filtro: true, varias: true, movil: 1.5, max_velas: 360, tp_movil: 3.0 }],
-  ["objmovil30", "Stop móvil + objetivo móvil, 30 días", { filtro: true, varias: true, movil: 1.5, tp_movil: 3.0 }]
+  ["c7_50", "EMA 7/50 · principal", CUIDADA],
+  ["c8_50", "EMA 8/50", CUIDADA],
+  ["c6_50", "EMA 6/50", CUIDADA],
+  ["cuidada", "EMA 9/50 · principal anterior", CUIDADA],
+  ["c7_25", "EMA 7/25", CUIDADA]
 ];
+// EMA rapida y lenta de la senal de cada cuenta (todas: stop movil, 60 dias, entradas cuidadas)
+var EMAS = { c7_50: [7, 50], c8_50: [8, 50], c6_50: [6, 50], cuidada: [9, 50], c7_25: [7, 25] };
 function ema(v, per) { var a = 2.0 / (per + 1), out = [], e = null; for (var i = 0; i < v.length; i++) { e = e === null ? v[i] : e + a * (v[i] - e); out.push(e); } return out; }
 function rsi14(c) {
   var out = [null], g = null, p = null, a = 1.0 / 14;
   for (var i = 1; i < c.length; i++) { var d = c[i] - c[i - 1], gan = Math.max(d, 0), per = Math.max(-d, 0); g = g === null ? gan : g + a * (gan - g); p = p === null ? per : p + a * (per - p); out.push(p === 0 ? 100.0 : 100.0 - 100.0 / (1.0 + g / p)); }
   return out;
 }
-function indicadores(velas) {
-  var c = velas.map(function (v) { return v[4]; }), e9 = ema(c, 9), e50 = ema(c, 50), e100 = ema(c, 100), e200 = ema(c, 200), n = c.length, cinta = new Array(n), pct = new Array(n).fill(null);
+function indicadores(velas, rapida, lenta) {
+  rapida = rapida || 9; lenta = lenta || 50;
+  var c = velas.map(function (v) { return v[4]; }), e9 = ema(c, rapida), e50 = ema(c, lenta), e100 = ema(c, 100), e200 = ema(c, 200), n = c.length, cinta = new Array(n), pct = new Array(n).fill(null);
   for (var i = 0; i < n; i++) cinta[i] = (Math.max(e9[i], e50[i], e100[i], e200[i]) - Math.min(e9[i], e50[i], e100[i], e200[i])) / c[i];
   for (i = VENTANA_CINTA - 1; i < n; i++) { var x = cinta[i], me = 0, ig = 0; for (var j = i - VENTANA_CINTA + 1; j <= i; j++) { if (cinta[j] < x) me++; else if (cinta[j] === x) ig++; } pct[i] = (me + (ig + 1) / 2.0) / VENTANA_CINTA; }
-  return { c: c, e9: e9, e50: e50, pct: pct, rsi: rsi14(c) };
+  return { c: c, e9: e9, e50: e50, pct: pct, rsi: rsi14(c), e50real: lenta === 50 ? e50 : ema(c, 50) };
 }
 function extras(velas, k) {
   var c = velas.map(function (v) { return v[4]; }), e50 = ema(c, 50), dist = [], atr = [], a = 1.0 / 14, x = null;
@@ -167,17 +172,17 @@ function lateral(velas, c, e50, i, k) {
   for (j = i - 59; j <= i; j++) if (sg(j) !== sg(j - 1)) cruces++;
   return { pasa: rango <= F_RANGO && efic >= F_EFIC && cruces <= F_CRUCES, rango: rango, efic: efic, cruces: cruces };
 }
-function senales(velas, k) {
-  var I = indicadores(velas), c = I.c, e9 = I.e9, e50 = I.e50, pct = I.pct, rsi = I.rsi, s = new Array(c.length).fill(0), fil = {};
+function senales(velas, k, rapida, lenta) {
+  var I = indicadores(velas, rapida, lenta), c = I.c, e9 = I.e9, e50 = I.e50, e50r = I.e50real, pct = I.pct, rsi = I.rsi, s = new Array(c.length).fill(0), fil = {};
   for (var i = 1; i < c.length; i++) {
     if (pct[i] === null || rsi[i] === null || pct[i] >= COMPRESION) continue;
     var arr = c[i] > Math.max(e9[i], e50[i]), arrP = c[i - 1] > Math.max(e9[i - 1], e50[i - 1]), aba = c[i] < Math.min(e9[i], e50[i]), abaP = c[i - 1] < Math.min(e9[i - 1], e50[i - 1]);
     if (arr && !arrP && rsi[i] > 52) s[i] = 1; else if (aba && !abaP && rsi[i] < 48) s[i] = -1;
-    if (s[i] !== 0) fil[i] = lateral(velas, c, e50, i, k).pasa;
+    if (s[i] !== 0) fil[i] = lateral(velas, c, e50r, i, k).pasa;
   }
   i = c.length - 1; var estado = null;
   if (i >= 0 && pct[i] !== null) {
-    var L = lateral(velas, c, e50, i, k);
+    var L = lateral(velas, c, e50r, i, k);
     estado = { precio: c[i], cinta_pct: pct[i], rsi: rsi[i], posicion: c[i] > Math.max(e9[i], e50[i]) ? "arriba" : c[i] < Math.min(e9[i], e50[i]) ? "abajo" : "entre", filtro: L.pasa, rango: L.rango, eficiencia: L.efic, cruces: L.cruces };
   }
   return { s: s, estado: estado, fil: fil };
@@ -247,8 +252,13 @@ function calcular(datos, funding, manuales) {       // datos: { simbolo: { velas
   REGLAS.forEach(function (r) { cuentas[r[0]] = []; });
   Object.keys(MONEDAS).forEach(function (sim) {
     var d = datos[sim]; if (!d || d.velas.length < VENTANA_CINTA + 5) return;
-    var pre = senales(d.velas, MONEDAS[sim]), ex = extras(d.velas, MONEDAS[sim]); estados[sim] = pre.estado;
-    REGLAS.forEach(function (r) { cuentas[r[0]] = cuentas[r[0]].concat(simular(sim, d.velas, d.enCurso, INICIO_CUENTA, r[2], pre, ex, manuales ? manuales[r[0]] : null)); });
+    var ex = extras(d.velas, MONEDAS[sim]), pres = {};
+    REGLAS.forEach(function (r) {
+      var par = EMAS[r[0]] || [9, 50], kp = par.join("/");
+      if (!pres[kp]) pres[kp] = senales(d.velas, MONEDAS[sim], par[0], par[1]);
+      cuentas[r[0]] = cuentas[r[0]].concat(simular(sim, d.velas, d.enCurso, INICIO_CUENTA, r[2], pres[kp], ex, manuales ? manuales[r[0]] : null));
+    });
+    estados[sim] = pres[(EMAS[REGLAS[0][0]] || [9, 50]).join("/")].estado;
   });
   REGLAS.forEach(function (r) { cuentas[r[0]] = cuenta(cuentas[r[0]], funding); });
   return { cuentas: cuentas, estados: estados };
@@ -259,7 +269,7 @@ if (typeof module !== "undefined") module.exports = { calcular: calcular, resume
 <script>
 (function () {
   var BASE = "https://fapi.binance.com", $ = function (id) { return document.getElementById(id); };
-  var R = null, regla = "cuidada", tab = "ab", ocupado = false, ultimo = 0, vivoTs = 0, DAT = null, FUN = null, M = [], pidiendo = null, guarda = true;
+  var R = null, regla = "c7_50", tab = "ab", ocupado = false, ultimo = 0, vivoTs = 0, DAT = null, FUN = null, M = [], pidiendo = null, guarda = true;
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   function fN(x, d) { return x.toLocaleString("es-AR", { minimumFractionDigits: d, maximumFractionDigits: d }); }
@@ -429,11 +439,11 @@ if (typeof module !== "undefined") module.exports = { calcular: calcular, resume
       var comp = e.cinta_pct < COMPRESION, lect = e.rango === null ? "" : comp ? (e.filtro ? "Lista: una ruptura de las EMA con RSI a favor abre posición." : "Comprimida pero lateral: la señal se descartaría.") : "EMAs abiertas: no hay señal hasta que se compriman.";
       var mias = ab.filter(function (o) { return o.simbolo === s; });
       return '<div class="op"><div class="r1"><div><span class="m">' + nomb + '</span> <span class="tag' + (comp && e.filtro ? " vivo" : "") + '">' + (comp && e.filtro ? "lista para señal" : comp ? "lateral" : "sin señal") + '</span></div><div class="res">' + fP(e.precio) + "</div></div>" +
-        '<div class="det"><span>Contra EMA 9 y 50 <b>' + e.posicion + "</b></span><span>RSI <b>" + fN(e.rsi, 0) + "</b></span><span>EMAs comprimidas <b>" + (comp ? "sí" : "no") + " (pct " + Math.round(e.cinta_pct * 100) + ")</b></span><span>Lateral <b>" + (e.rango === null ? "s/d" : e.filtro ? "no" : "sí") + "</b></span>" +
+        '<div class="det"><span>Contra EMA 7 y 50 <b>' + e.posicion + "</b></span><span>RSI <b>" + fN(e.rsi, 0) + "</b></span><span>EMAs comprimidas <b>" + (comp ? "sí" : "no") + " (pct " + Math.round(e.cinta_pct * 100) + ")</b></span><span>Lateral <b>" + (e.rango === null ? "s/d" : e.filtro ? "no" : "sí") + "</b></span>" +
         (e.rango === null ? "" : "<span>Rango 30 d <b>" + fN(e.rango, 0) + "%</b></span><span>Cruces EMA 50 <b>" + e.cruces + "</b></span>") + "<span>Abiertas ahora <b>" + (mias.length ? mias.length + " " + mias[0].lado + (mias.length > 1 ? "s" : "") : "no") + "</b></span></div>" + '<div class="sub">' + lect + "</div></div>";
     }).join("");
     $("lista").innerHTML = h;
-    $("nman").textContent = M.length ? M.length + (M.length === 1 ? " cierre" : " cierres") + " sumando las cuatro cuentas" : "ninguno";
+    $("nman").textContent = M.length ? M.length + (M.length === 1 ? " cierre" : " cierres") + " sumando las cinco cuentas" : "ninguno";
     if (M.length && !guarda) $("msgman").textContent = "Atención: este navegador no está guardando los cierres. Si cerrás la página se pierden; copiá el código y guardalo.";
   }
   $("lista").addEventListener("click", function (e) {
@@ -475,9 +485,9 @@ if (typeof module !== "undefined") module.exports = { calcular: calcular, resume
   $("quitartk").addEventListener("click", function () { tk = ""; try { localStorage.removeItem("gh_token"); } catch (e) {} mostrarTk(); $("msgman").textContent = "Clave quitada de este navegador."; sincronizar(); });
   mostrarTk();
   $("act").addEventListener("click", actualizar);
-  $("reglas").addEventListener("click", function (e) { var b = e.target.closest("button"); if (b) { regla = b.getAttribute("data-k"); lsSet("regla2", regla); pintar(); } });
+  $("reglas").addEventListener("click", function (e) { var b = e.target.closest("button"); if (b) { regla = b.getAttribute("data-k"); lsSet("regla3", regla); pintar(); } });
   $("tabs").addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b) return; tab = b.getAttribute("data-t"); [].forEach.call($("tabs").children, function (c) { c.setAttribute("aria-pressed", c === b); }); pintar(); });
-  var rg = lsGet("regla2"); if (rg && REGLAS.some(function (r) { return r[0] === rg; })) regla = rg;
+  var rg = lsGet("regla3"); if (rg && REGLAS.some(function (r) { return r[0] === rg; })) regla = rg;
   setInterval(function () { if (!document.hidden) actualizar(); }, 300000);
   document.addEventListener("visibilitychange", function () { if (!document.hidden && Date.now() - ultimo > 120000) actualizar(); });
   actualizar();
